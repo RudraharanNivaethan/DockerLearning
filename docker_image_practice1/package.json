@@ -1,0 +1,5 @@
+{
+    "name": "docker_image_practice1",
+    "version": "1.0.0",
+    "main": "server.js"
+  }
