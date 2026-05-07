@@ -2,7 +2,7 @@ version: '3'
 services:
      myapp:
       build: .
-      image: app-myapp:1.0.0
+      image: darkemperor6/app-myapp:1.0.1
       ports:
         - 3000:3000
       depends_on:
