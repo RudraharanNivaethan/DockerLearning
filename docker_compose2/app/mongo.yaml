@@ -1,5 +1,12 @@
 version: '3'
 services:
+     myapp:
+      build: .
+      ports:
+        - 3000:3000
+      depends_on:
+        - mongo
+
      mongo:
        image: mongo:8.0.21
        ports:
@@ -7,6 +14,7 @@ services:
        environment:
          - MONGO_INITDB_ROOT_USERNAME=gloriousadmin
          - MONGO_INITDB_ROOT_PASSWORD=ingloriouslies
+         
      mongo-express:
        image: mongo-express:1.0.2
        ports:
