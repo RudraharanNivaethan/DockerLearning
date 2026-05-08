@@ -1,28 +1,33 @@
 version: '3'
 services:
-     learn-volume:
+    learn-volume:
       build: .
-      image: darkemperor6/app-learn-volume:1.0.1
+      image: darkemperor6/app-learn-volume:1.0.0
       ports:
         - 3000:3000
       depends_on:
         - mongo
 
-     mongo:
-       image: mongo:8.0.21
-       ports:
-         - 27017:27017
-       environment:
-         - MONGO_INITDB_ROOT_USERNAME=gloriousadmin
-         - MONGO_INITDB_ROOT_PASSWORD=ingloriouslies
+    mongo:
+      image: mongo:8.0.21
+      ports:
+        - 27017:27017
+      volumes:
+        - mongo-data:/data/db
+      environment:
+        - MONGO_INITDB_ROOT_USERNAME=gloriousadmin
+        - MONGO_INITDB_ROOT_PASSWORD=ingloriouslies
 
-     mongo-express:
-       image: mongo-express:1.0.2
-       ports:
-         - 8081:8081
-       environment:
-         - ME_CONFIG_MONGODB_ADMINUSERNAME=gloriousadmin 
-         - ME_CONFIG_MONGODB_ADMINPASSWORD=ingloriouslies 
-         - ME_CONFIG_MONGODB_URL=mongodb://gloriousadmin:ingloriouslies@mongo:27017
-       depends_on:
-         - mongo
+    mongo-express:
+      image: mongo-express:1.0.2
+      ports:
+        - 8081:8081
+      environment:
+        - ME_CONFIG_MONGODB_ADMINUSERNAME=gloriousadmin 
+        - ME_CONFIG_MONGODB_ADMINPASSWORD=ingloriouslies 
+        - ME_CONFIG_MONGODB_URL=mongodb://gloriousadmin:ingloriouslies@mongo:27017
+      depends_on:
+        - mongo
+volumes:
+    mongo-data:
+      driver: local
