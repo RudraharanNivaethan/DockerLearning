@@ -1,0 +1,15 @@
+services:
+  ai-app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      -  /mnt/d/ai_models:/ai_models
+    environment:
+      - MODEL_DIR=/ai_models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
