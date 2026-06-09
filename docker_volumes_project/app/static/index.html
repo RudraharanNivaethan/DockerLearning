@@ -8,7 +8,7 @@
         * { box-sizing: border-box; }
         body {
             font-family: system-ui, -apple-system, sans-serif;
-            max-width: 720px;
+            max-width: 760px;
             margin: 0 auto;
             padding: 24px;
             background: #f5f5f5;
@@ -63,7 +63,7 @@
             background: #94a3b8;
             cursor: not-allowed;
         }
-        .response {
+        .response-box {
             white-space: pre-wrap;
             min-height: 60px;
             padding: 12px;
@@ -71,12 +71,67 @@
             border-radius: 6px;
             border: 1px solid #e2e8f0;
         }
-        .spinner { display: inline-block; margin-left: 8px; }
+
+        /* History */
+        #history-list { list-style: none; padding: 0; margin: 0; }
+        .history-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            background: #f8fafc;
+        }
+        .history-card .ts {
+            font-size: 0.75rem;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        .history-card .prompt-text {
+            font-weight: 600;
+            margin-bottom: 6px;
+            white-space: pre-wrap;
+        }
+        .history-card .resp-text {
+            color: #444;
+            white-space: pre-wrap;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+        .history-card .resp-text.expanded {
+            display: block;
+        }
+        .toggle-btn {
+            margin-top: 6px;
+            padding: 3px 10px;
+            font-size: 0.8rem;
+            background: transparent;
+            border: 1px solid #94a3b8;
+            color: #555;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .toggle-btn:hover { background: #e2e8f0; }
+        #history-empty { color: #888; font-size: 0.9rem; }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .panel-header strong { font-size: 1rem; }
+        .mongo-link {
+            font-size: 0.8rem;
+            color: #2563eb;
+            text-decoration: none;
+        }
+        .mongo-link:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <h1>AI Model Repository</h1>
-    <p>TinyLlama chat demo — models persist on <code>D:\ai_models</code> via Docker bind mount.</p>
+    <p>TinyLlama chat demo — models persist on <code>/ai_models</code> via Docker bind mount.</p>
 
     <div class="panel">
         <div id="status-banner" class="status status-idle">Checking model status...</div>
@@ -91,22 +146,33 @@
 
     <div class="panel">
         <strong>Response</strong>
-        <div id="response" class="response">—</div>
+        <div id="response" class="response-box">—</div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <strong>History</strong>
+            <a class="mongo-link" href="http://localhost:8081" target="_blank">Open Mongo Express →</a>
+        </div>
+        <ul id="history-list"></ul>
+        <p id="history-empty" style="display:none">No history yet.</p>
     </div>
 
     <script>
         const statusBanner = document.getElementById('status-banner');
-        const statusMeta = document.getElementById('status-meta');
-        const promptInput = document.getElementById('prompt');
-        const generateBtn = document.getElementById('generate-btn');
-        const responseEl = document.getElementById('response');
+        const statusMeta   = document.getElementById('status-meta');
+        const promptInput  = document.getElementById('prompt');
+        const generateBtn  = document.getElementById('generate-btn');
+        const responseEl   = document.getElementById('response');
+        const historyList  = document.getElementById('history-list');
+        const historyEmpty = document.getElementById('history-empty');
 
         const stateLabels = {
-            idle: 'Initializing...',
+            idle:        'Initializing...',
             downloading: 'Downloading model (~637 MB, one-time)...',
-            loading: 'Loading model from disk...',
-            ready: 'Ready — model loaded from persistent storage',
-            error: 'Error'
+            loading:     'Loading model from disk...',
+            ready:       'Ready — model loaded from persistent storage',
+            error:       'Error'
         };
 
         function updateStatus(data) {
@@ -117,30 +183,81 @@
             statusBanner.className = `status status-${data.state}`;
 
             const parts = [`Path: ${data.model_path}`];
-            if (data.exists_on_disk) {
-                parts.push(`On disk: yes (${data.file_size_mb} MB)`);
-            } else {
-                parts.push('On disk: no');
-            }
+            parts.push(data.exists_on_disk
+                ? `On disk: yes (${data.file_size_mb} MB)`
+                : 'On disk: no');
             statusMeta.textContent = parts.join(' · ');
 
-            const ready = data.ready;
-            promptInput.disabled = !ready;
-            generateBtn.disabled = !ready;
+            promptInput.disabled = !data.ready;
+            generateBtn.disabled = !data.ready;
         }
 
         async function pollStatus() {
             try {
-                const res = await fetch('/api/status');
+                const res  = await fetch('/api/status');
                 const data = await res.json();
                 updateStatus(data);
-                if (!data.ready && data.state !== 'error') {
+                if (data.ready) {
+                    loadHistory();
+                } else if (data.state !== 'error') {
                     setTimeout(pollStatus, 2000);
                 }
-            } catch (err) {
+            } catch {
                 statusBanner.textContent = 'Cannot reach server';
-                statusBanner.className = 'status status-error';
+                statusBanner.className   = 'status status-error';
                 setTimeout(pollStatus, 3000);
+            }
+        }
+
+        function formatTimestamp(ts) {
+            try {
+                return new Date(ts).toLocaleString();
+            } catch {
+                return ts;
+            }
+        }
+
+        function makeCard(entry) {
+            const li = document.createElement('li');
+            li.className = 'history-card';
+
+            const ts = document.createElement('div');
+            ts.className = 'ts';
+            ts.textContent = formatTimestamp(entry.timestamp);
+
+            const prompt = document.createElement('div');
+            prompt.className = 'prompt-text';
+            prompt.textContent = entry.prompt;
+
+            const resp = document.createElement('div');
+            resp.className = 'resp-text';
+            resp.textContent = entry.response;
+
+            const toggle = document.createElement('button');
+            toggle.className = 'toggle-btn';
+            toggle.textContent = 'Show more';
+            toggle.addEventListener('click', () => {
+                const expanded = resp.classList.toggle('expanded');
+                toggle.textContent = expanded ? 'Show less' : 'Show more';
+            });
+
+            li.append(ts, prompt, resp, toggle);
+            return li;
+        }
+
+        async function loadHistory() {
+            try {
+                const res  = await fetch('/api/history');
+                const docs = await res.json();
+                historyList.innerHTML = '';
+                if (docs.length === 0) {
+                    historyEmpty.style.display = 'block';
+                } else {
+                    historyEmpty.style.display = 'none';
+                    docs.forEach(d => historyList.appendChild(makeCard(d)));
+                }
+            } catch {
+                /* non-fatal */
             }
         }
 
@@ -153,9 +270,9 @@
 
             try {
                 const res = await fetch('/api/generate', {
-                    method: 'POST',
+                    method:  'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt, max_tokens: 128 })
+                    body:    JSON.stringify({ prompt, max_tokens: 128 })
                 });
 
                 if (!res.ok) {
@@ -165,6 +282,13 @@
 
                 const data = await res.json();
                 responseEl.textContent = data.response;
+
+                historyEmpty.style.display = 'none';
+                historyList.prepend(makeCard({
+                    prompt,
+                    response:  data.response,
+                    timestamp: new Date().toISOString()
+                }));
             } catch (err) {
                 responseEl.textContent = `Error: ${err.message}`;
             } finally {
